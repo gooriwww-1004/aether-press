@@ -5,7 +5,7 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const GEMINI_ENDPOINT =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // -------------------------------------------------------
 // 공통 Gemini 호출 함수
@@ -76,7 +76,7 @@ export async function generateNovel(theme: string) {
     content:      parseField(result, '내용') || result.trim(),
     author_name:  '백서아',
     category:     '연재소설',
-    ai_model:     'gemini-1.5-flash',
+    ai_model:     'gemini-2.5-flash',
   };
 }
 
@@ -107,7 +107,7 @@ export async function generateLifestyle(theme: string) {
     content:      parseField(result, '내용') || result.trim(),
     author_name:  '강서진',
     category:     '라이프',
-    ai_model:     'gemini-1.5-flash',
+    ai_model:     'gemini-2.5-flash',
   };
 }
 
