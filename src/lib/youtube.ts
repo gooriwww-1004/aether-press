@@ -1,52 +1,79 @@
 // src/lib/youtube.ts
-// YouTube Data API v3 - 트렌딩 영상 수집
+// 재생목록 3개에서 각각 랜덤 영상 1개씩 가져오기
 
 export interface YouTubeVideo {
   videoId: string;
   title: string;
   channelTitle: string;
   thumbnailUrl: string;
+  playlistId: string;
 }
 
-export async function fetchTrendingVideos(
-  maxResults = 3,
-  regionCode = 'KR',
-  categoryId = '28' // 28 = Science & Technology
-): Promise<YouTubeVideo[]> {
+const PLAYLISTS = [
+  'PLkqWRj5Y_xwkMKfPdKk7oiYg8GQiAH00Y',
+  'PLkqWRj5Y_xwlkgEXTRgFcIQKg3uwJK0u8',
+  'PLkqWRj5Y_xwm6UI9HAwNB4sNzISug-r-G',
+];
+
+// 재생목록에서 최대 50개 가져온 뒤 랜덤 1개 선택
+async function fetchRandomFromPlaylist(
+  playlistId: string,
+  apiKey: string
+): Promise<YouTubeVideo | null> {
+  try {
+    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('playlistId', playlistId);
+    url.searchParams.set('maxResults', '50');
+    url.searchParams.set('key', apiKey);
+
+    const res = await fetch(url.toString(), {
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) {
+      console.error(`[YouTube] playlist ${playlistId} error: ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const items = (data.items ?? []).filter(
+      (item: any) => item.snippet?.resourceId?.videoId
+    );
+
+    if (items.length === 0) return null;
+
+    // 랜덤 선택
+    const random = items[Math.floor(Math.random() * items.length)];
+    const snippet = random.snippet;
+    const videoId = snippet.resourceId.videoId;
+
+    return {
+      videoId,
+      title:        snippet.title,
+      channelTitle: snippet.channelTitle || snippet.videoOwnerChannelTitle || '',
+      thumbnailUrl: snippet.thumbnails?.maxres?.url ||
+                    snippet.thumbnails?.high?.url ||
+                    snippet.thumbnails?.medium?.url || '',
+      playlistId,
+    };
+  } catch (err) {
+    console.error(`[YouTube] playlist ${playlistId} failed:`, err);
+    return null;
+  }
+}
+
+export async function fetchPlaylistVideos(): Promise<YouTubeVideo[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
     console.warn('[YouTube] API key not found');
     return [];
   }
 
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
-    url.searchParams.set('part', 'snippet');
-    url.searchParams.set('chart', 'mostPopular');
-    url.searchParams.set('regionCode', regionCode);
-    url.searchParams.set('videoCategoryId', categoryId);
-    url.searchParams.set('maxResults', String(maxResults));
-    url.searchParams.set('key', apiKey);
+  // 3개 재생목록 병렬 호출
+  const results = await Promise.all(
+    PLAYLISTS.map((id) => fetchRandomFromPlaylist(id, apiKey))
+  );
 
-    const res = await fetch(url.toString(), {
-      next: { revalidate: 3600 }, // 1시간 캐시
-    });
-
-    if (!res.ok) {
-      console.error('[YouTube] API error:', res.status);
-      return [];
-    }
-
-    const data = await res.json();
-    return (data.items ?? []).map((item: any) => ({
-      videoId:      item.id,
-      title:        item.snippet.title,
-      channelTitle: item.snippet.channelTitle,
-      thumbnailUrl: item.snippet.thumbnails?.high?.url ||
-                    item.snippet.thumbnails?.medium?.url || '',
-    }));
-  } catch (err) {
-    console.error('[YouTube] fetch failed:', err);
-    return [];
-  }
+  return results.filter((v): v is YouTubeVideo => v !== null);
 }
