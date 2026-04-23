@@ -16,7 +16,7 @@ const supabase = createClient(
 );
 
 // ISR: 1시간마다 재빌드
-export const revalidate = 3600;
+export const revalidate = 60;
 
 export default async function Home() {
   const today = new Date().toISOString().split('T')[0];
@@ -34,7 +34,6 @@ export default async function Home() {
     .from('posts')
     .select('id, title, content, author_name, category')
     .eq('content_type', 'ai_created')
-    .eq('published_date', today)
     .order('created_at', { ascending: false })
     .limit(4);
 
