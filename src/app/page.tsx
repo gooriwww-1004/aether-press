@@ -5,6 +5,7 @@ import NovelSection from '@/components/NovelSection';
 import Footer from '@/components/Footer';
 import AdBanner from '@/components/AdBanner';
 import MediaSection from '@/components/MediaSection';
+import ProductSection from '@/components/ProductSection';
 import { createClient } from '@supabase/supabase-js';
 import { fetchPlaylistVideos } from '@/lib/youtube';
 
@@ -16,6 +17,7 @@ const supabase = createClient(
 export const revalidate = 3600;
 
 export default async function Home() {
+  // 뉴스
   const { data: newsPosts } = await supabase
     .from('posts')
     .select('id, title, summary, source_name, external_url')
@@ -23,6 +25,7 @@ export default async function Home() {
     .order('created_at', { ascending: false })
     .limit(6);
 
+  // AI 창작물
   const { data: aiPosts } = await supabase
     .from('posts')
     .select('id, title, content, author_name, category')
@@ -30,13 +33,21 @@ export default async function Home() {
     .order('created_at', { ascending: false })
     .limit(4);
 
+  // 광고
   const { data: adPosts } = await supabase
     .from('posts')
     .select('title, summary, ad_link_url, ad_sponsor')
     .eq('content_type', 'ad')
     .limit(5);
 
-  // 재생목록 3개에서 랜덤 영상 1개씩
+  // 상품
+  const { data: products } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  // YouTube
   const videos = await fetchPlaylistVideos();
 
   const ads = adPosts?.map((a) => ({
@@ -49,6 +60,7 @@ export default async function Home() {
   return (
     <div className="flex flex-col items-center min-h-screen bg-white">
       <Header />
+
       <main className="w-full max-w-screen-xl px-4 md:px-8">
 
         {/* 뉴스 */}
@@ -76,13 +88,20 @@ export default async function Home() {
         {/* 광고 */}
         <AdBanner ads={ads} variant="horizontal" />
 
-        {/* 뮤직 픽스 */}
+        {/* 뮤직 */}
         <MediaSection videos={videos} />
 
         {/* AI 창작 */}
         <NovelSection data={aiPosts} />
 
+        {/* 광고 2 */}
+        <AdBanner ads={ads} variant="horizontal" />
+
+        {/* 상품 */}
+        <ProductSection products={products} />
+
       </main>
+
       <Footer />
     </div>
   );
