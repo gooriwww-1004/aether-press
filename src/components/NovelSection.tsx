@@ -14,17 +14,13 @@ interface NovelSectionProps {
   data: Post[] | null;
 }
 
-// content 필드 정리: "제목: xxx\n내용: yyy" 형태면 내용만 추출
 function cleanContent(raw: string): string {
   if (!raw) return '';
-  // "내용:" 이후 텍스트만 추출
   const match = raw.match(/내용[:：]\s*([\s\S]+)/);
   if (match) return match[1].trim();
-  // "제목:" 만 있고 내용이 없는 경우 제거
   return raw.replace(/^제목[:：][^\n]*\n?/, '').trim();
 }
 
-// title 필드 정리: "제목: xxx" 형태면 xxx만 추출
 function cleanTitle(raw: string): string {
   if (!raw) return '';
   const match = raw.match(/제목[:：]\s*(.+)/);
@@ -43,6 +39,12 @@ export default function NovelSection({ data }: NovelSectionProps) {
       category: '연재소설',
     },
   ];
+
+  // /board/write?title=xxx 로 바로 이동
+  const getBoardWriteUrl = (title: string, author: string, category: string) => {
+    const writeTitle = `[${category}] ${title} - ${author} 감상`;
+    return `https://queenofboard.vercel.app/board/write?title=${encodeURIComponent(writeTitle)}`;
+  };
 
   return (
     <>
@@ -69,14 +71,31 @@ export default function NovelSection({ data }: NovelSectionProps) {
                   <p className="text-xl text-slate-800 leading-relaxed italic opacity-95 whitespace-pre-wrap">
                     &ldquo;{preview}&rdquo;
                   </p>
-                  <div className="mt-10 flex gap-4 font-sans">
+
+                  {/* 버튼 */}
+                  <div className="mt-10 flex flex-wrap gap-3 font-sans">
                     <button
                       onClick={() => setModalPost({ ...post, title, content })}
                       className="px-6 py-2 bg-black text-white text-[11px] font-bold hover:bg-blue-800 transition"
                     >
                       전문 읽기
                     </button>
+                    <a
+                      href={getBoardWriteUrl(title, post.author_name, post.category)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-2 border border-black text-black text-[11px] font-bold hover:bg-black hover:text-white transition flex items-center gap-1"
+                    >
+                      💬 감상 남기기
+                    </a>
                   </div>
+                  <p className="mt-3 text-[10px] text-gray-400 font-sans">
+                    감상은 커뮤니티 게시판에 남겨주세요 →{' '}
+                    <a href="https://queenofboard.vercel.app/board" target="_blank" rel="noopener noreferrer"
+                       className="underline hover:text-black transition-colors">
+                      queenofboard
+                    </a>
+                  </p>
                 </article>
               );
             })}
@@ -84,45 +103,36 @@ export default function NovelSection({ data }: NovelSectionProps) {
         </div>
       </section>
 
-      {/* 모달 */}
+      {/* 전문 읽기 모달 */}
       {modalPost && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={() => setModalPost(null)}
-        >
-          <div
-            className="bg-white max-w-2xl w-full max-h-[80vh] overflow-y-auto p-10 relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 닫기 버튼 */}
-            <button
-              onClick={() => setModalPost(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-black text-xl font-light"
-            >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+             onClick={() => setModalPost(null)}>
+          <div className="bg-white max-w-2xl w-full max-h-[80vh] overflow-y-auto p-10 relative"
+               onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setModalPost(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-black text-xl font-light">
               ✕
             </button>
-
-            {/* 메타 */}
             <span className="text-blue-800 font-bold text-[10px] tracking-[0.3em] uppercase font-sans">
               {modalPost.category} by {modalPost.author_name}
             </span>
-
-            {/* 제목 */}
             <h2 className="text-3xl font-bold mt-3 mb-8 leading-tight text-black">
               {modalPost.title}
             </h2>
-
-            {/* 본문 */}
             <p className="text-lg text-slate-800 leading-relaxed italic whitespace-pre-wrap">
               {modalPost.content || '내용을 불러오는 중입니다.'}
             </p>
-
-            {/* 하단 닫기 */}
-            <div className="mt-10 font-sans">
-              <button
-                onClick={() => setModalPost(null)}
-                className="px-6 py-2 border border-black text-[11px] font-bold hover:bg-black hover:text-white transition"
+            <div className="mt-10 flex gap-3 font-sans">
+              <a
+                href={getBoardWriteUrl(modalPost.title, modalPost.author_name, modalPost.category)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-2 bg-black text-white text-[11px] font-bold hover:bg-blue-800 transition"
               >
+                💬 감상 남기기
+              </a>
+              <button onClick={() => setModalPost(null)}
+                      className="px-6 py-2 border border-black text-[11px] font-bold hover:bg-black hover:text-white transition">
                 닫기
               </button>
             </div>
