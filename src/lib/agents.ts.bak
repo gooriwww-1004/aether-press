@@ -1,9 +1,12 @@
-// src/lib/agents.ts
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const GEMINI_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-async function callGemini(prompt: string, maxTokens = 800, temperature = 0.85): Promise<string> {
+async function callGemini(
+  prompt: string,
+  maxTokens = 600,
+  temperature = 0.85
+): Promise<string> {
   const res = await fetch(GEMINI_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -19,69 +22,59 @@ async function callGemini(prompt: string, maxTokens = 800, temperature = 0.85): 
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`[Gemini] API error ${res.status}: ${err.slice(0, 200)}`);
+    const errText = await res.text();
+    throw new Error(`[Gemini] API error ${res.status}: ${errText.slice(0, 200)}`);
   }
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-// 응답 파싱: "제목:" / "내용:" 구분자
 function parseField(text: string, key: string): string {
-  const re = new RegExp(`${key}[:：]\\s*([\\s\\S]+?)(?=\\n(?:제목|내용|헤드라인|요약)[:：]|$)`);
+  const re = new RegExp(`${key}[::]\\s*([\\s\\S]+?)(?=\\n(?:제목|내용|헤드라인|요약)[::]|$)`);
   const match = text.match(re);
   return (match?.[1] ?? '').trim();
 }
 
-// ── 백서아: SF 소설 ──────────────────────────────
 export async function generateNovel(theme: string) {
   const prompt = `당신은 에테르 프레스의 SF 소설 작가 '백서아'입니다.
 오늘의 테마: "${theme}"
 
-반드시 아래 형식 그대로만 출력하세요. 설명이나 추가 문장 없이.
+아래 형식을 반드시 지켜서 작성하세요. 다른 말은 하지 마세요.
 
-제목: [소설 제목 20자 이내]
-내용: [소설 본문. 300~400자. 철학적이고 시적인 한국어 문체. 디지털과 인간 감성의 경계. 단락 구분 가능.]`;
+제목: [소설 제목 (20자 이내)]
+내용: [소설 본문 250~350자. 철학적이고 시적인 문체. 디지털 세계와 인간 감성의 경계를 다루는 서사. 한국어.]`;
 
-  const raw = await callGemini(prompt, 800, 0.9);
-  const title   = parseField(raw, '제목') || '코드의 바다';
-  const content = parseField(raw, '내용') || raw.replace(/^제목[:：][^\n]*\n?/, '').trim();
-
+  const result = await callGemini(prompt, 600, 0.9);
   return {
     content_type: 'ai_created' as const,
-    title,
-    content,
-    author_name: '백서아',
-    category:    '연재소설',
-    ai_model:    'gemini-2.5-flash',
+    title:        parseField(result, '제목') || '코드의 바다',
+    content:      parseField(result, '내용') || result.trim(),
+    author_name:  '백서아',
+    category:     '연재소설',
+    ai_model:     'gemini-2.5-flash',
   };
 }
 
-// ── 강서진: 라이프 ───────────────────────────────
 export async function generateLifestyle(theme: string) {
   const prompt = `당신은 에테르 프레스의 라이프 기자 '강서진'입니다.
 오늘의 테마: "${theme}"
 
-반드시 아래 형식 그대로만 출력하세요. 설명이나 추가 문장 없이.
+아래 형식을 반드시 지켜서 작성하세요. 다른 말은 하지 마세요.
 
-제목: [제목 20자 이내]
-내용: [본문. 280~380자. 정확한 수치(분·g·%) 포함. 논리적이고 실용적인 한국어. 단락 구분 가능.]`;
+제목: [제목 (20자 이내)]
+내용: [본문 220~300자. 정확한 수치(분, g, %) 포함. 논리적이고 간결하게. 한국어.]`;
 
-  const raw = await callGemini(prompt, 700, 0.8);
-  const title   = parseField(raw, '제목') || 'AI 시대 생산성 루틴';
-  const content = parseField(raw, '내용') || raw.replace(/^제목[:：][^\n]*\n?/, '').trim();
-
+  const result = await callGemini(prompt, 500, 0.8);
   return {
     content_type: 'ai_created' as const,
-    title,
-    content,
-    author_name: '강서진',
-    category:    '라이프',
-    ai_model:    'gemini-2.5-flash',
+    title:        parseField(result, '제목') || 'AI 시대 생산성 루틴',
+    content:      parseField(result, '내용') || result.trim(),
+    author_name:  '강서진',
+    category:     '라이프',
+    ai_model:     'gemini-2.5-flash',
   };
 }
 
-// ── 뉴스 요약 ────────────────────────────────────
 export async function summarizeNews(
   originalTitle: string,
   description: string,
@@ -92,19 +85,18 @@ export async function summarizeNews(
 원제목: ${originalTitle}
 내용: ${description.slice(0, 400)}
 
-반드시 아래 형식 그대로만 출력하세요.
+아래 형식을 반드시 지켜서 작성하세요. 다른 말은 하지 마세요.
 
-헤드라인: [한국어 헤드라인 30자 이내]
-요약: [핵심 사실 2~3문장 100자 이내]`;
+헤드라인: [한국어 헤드라인 25자 이내]
+요약: [핵심 사실 한 문장 60자 이내]`;
 
-  const raw = await callGemini(prompt, 300, 0.7);
+  const result = await callGemini(prompt, 200, 0.75);
   return {
-    title:   parseField(raw, '헤드라인') || originalTitle.slice(0, 60),
-    summary: parseField(raw, '요약')     || description.slice(0, 150),
+    title:   parseField(result, '헤드라인') || originalTitle.slice(0, 60),
+    summary: parseField(result, '요약')     || description.slice(0, 100),
   };
 }
 
-// ── 오늘의 테마 ──────────────────────────────────
 const THEMES_SF = [
   '디지털 의식과 인간의 기억', 'AI가 꾸는 꿈', '데이터 도시의 마지막 아날로그인',
   '0.1초의 영원', '코드로 짜여진 사랑', '양자 기억의 붕괴', '알고리즘이 된 신',
@@ -117,6 +109,9 @@ const THEMES_LIFE = [
 ];
 
 export function getTodayThemes(): { sf: string; life: string } {
-  const d = new Date().getDay();
-  return { sf: THEMES_SF[d % THEMES_SF.length], life: THEMES_LIFE[d % THEMES_LIFE.length] };
+  const dayIndex = new Date().getDay();
+  return {
+    sf:   THEMES_SF[dayIndex % THEMES_SF.length],
+    life: THEMES_LIFE[dayIndex % THEMES_LIFE.length],
+  };
 }

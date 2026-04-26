@@ -5,14 +5,17 @@ export interface RSSItem {
   description: string;
   pubDate: string;
   source: string;
-  imageUrl?: string; // OG 이미지
 }
 
 const RSS_FEEDS = [
+  // 글로벌
   { url: 'https://feeds.bbci.co.uk/news/technology/rss.xml',            name: 'BBC Technology' },
   { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml', name: 'NYT Technology' },
   { url: 'https://www.theverge.com/rss/index.xml',                      name: 'The Verge' },
+  // 구글 뉴스 (한국어 AI/기술)
   { url: 'https://news.google.com/rss/search?q=AI+인공지능&hl=ko&gl=KR&ceid=KR:ko', name: 'Google News' },
+  { url: 'https://news.google.com/rss/search?q=tech+technology&hl=ko&gl=KR&ceid=KR:ko', name: 'Google News Tech' },
+  // 네이버 뉴스 (RSS 공개 피드)
   { url: 'https://www.yonhapnewstv.co.kr/rss/it.xml',   name: '연합뉴스 IT' },
   { url: 'https://rss.etnews.com/Section901.xml',        name: '전자신문' },
   { url: 'https://www.hani.co.kr/rss/economy/',          name: '한겨레 경제' },
@@ -24,10 +27,13 @@ export async function fetchRSSFeeds(): Promise<RSSItem[]> {
   for (const feed of RSS_FEEDS) {
     try {
       const res = await fetch(feed.url, {
-        headers: { 'User-Agent': 'AetherPress/1.0', 'Accept': 'application/rss+xml, application/xml, text/xml' },
+        headers: {
+          'User-Agent': 'AetherPress/1.0 (+https://aether.press)',
+          'Accept': 'application/rss+xml, application/xml, text/xml',
+        },
         next: { revalidate: 3600 },
       });
-      if (!res.ok) continue;
+      if (!res.ok) { console.warn(`[RSS] ${feed.name} ${res.status}`); continue; }
       const xml = await res.text();
       const parsed = parseRSSXML(xml, feed.name);
       items.push(...parsed.slice(0, 2));
@@ -36,53 +42,9 @@ export async function fetchRSSFeeds(): Promise<RSSItem[]> {
     }
   }
 
-  const sorted = items
+  return items
     .sort((a, b) => new Date(b.pubDate || 0).getTime() - new Date(a.pubDate || 0).getTime())
     .slice(0, 12);
-
-  // OG 이미지 병렬 수집 (타임아웃 3초)
-  const withImages = await Promise.all(
-    sorted.map(async (item) => {
-      try {
-        const imageUrl = await fetchOGImage(item.link);
-        return { ...item, imageUrl };
-      } catch {
-        return item;
-      }
-    })
-  );
-
-  return withImages;
-}
-
-// OG 이미지 추출
-async function fetchOGImage(url: string): Promise<string | undefined> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'AetherPress/1.0' },
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) return undefined;
-    const html = await res.text();
-
-    // og:image 추출
-    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-    if (ogMatch?.[1]) return ogMatch[1];
-
-    // twitter:image fallback
-    const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-    if (twitterMatch?.[1]) return twitterMatch[1];
-
-    return undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function parseRSSXML(xml: string, source: string): RSSItem[] {
@@ -94,11 +56,12 @@ function parseRSSXML(xml: string, source: string): RSSItem[] {
     const block = match[1];
     const title       = extractCDATA(block, 'title');
     const link        = extractLink(block);
-    const description = extractCDATA(block, 'description') || extractCDATA(block, 'summary') || extractCDATA(block, 'content');
-    const pubDate     = extractCDATA(block, 'pubDate') || extractCDATA(block, 'published') || extractCDATA(block, 'updated');
-    // RSS 내 이미지 태그도 체크
-    const enclosure   = block.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]+type=["']image/i)?.[1];
-    const mediaContent = block.match(/<media:content[^>]+url=["']([^"']+)["']/i)?.[1];
+    const description = extractCDATA(block, 'description') ||
+                        extractCDATA(block, 'summary') ||
+                        extractCDATA(block, 'content');
+    const pubDate     = extractCDATA(block, 'pubDate') ||
+                        extractCDATA(block, 'published') ||
+                        extractCDATA(block, 'updated');
 
     if (title && link) {
       items.push({
@@ -107,7 +70,6 @@ function parseRSSXML(xml: string, source: string): RSSItem[] {
         description: sanitizeText(description).slice(0, 400),
         pubDate:     pubDate.trim(),
         source,
-        imageUrl:    enclosure || mediaContent,
       });
     }
   }
@@ -115,7 +77,9 @@ function parseRSSXML(xml: string, source: string): RSSItem[] {
 }
 
 function extractCDATA(xml: string, tag: string): string {
-  const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</${tag}>`, 'i');
+  const re = new RegExp(
+    `<${tag}[^>]*>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</${tag}>`, 'i'
+  );
   const m = xml.match(re);
   return (m?.[1] ?? m?.[2] ?? '').trim();
 }
